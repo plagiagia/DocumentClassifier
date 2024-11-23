@@ -1,16 +1,96 @@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Document } from "@db/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, Eye } from "lucide-react";
-import TagManager from "./TagManager";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { Document } from "@db/schema";
 import { format } from "date-fns";
+import { Eye, Download } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Document as PDFDocument, Page } from 'react-pdf';
+import { decryptData } from "../lib/encryption";
+import TagManager from "./TagManager";
+
+interface DocumentWithTags extends Document {
+  tags: string[];
+  encrypted: string;
+  content: string;
+  contentType: string;
+}
+
+interface DocumentPreviewProps {
+  document: DocumentWithTags;
+}
 
 interface DocumentCardProps {
-  document: Document;
+  document: DocumentWithTags;
   onTagsUpdate: (id: number, tags: string[]) => void;
+}
+
+function DocumentPreview({ document }: DocumentPreviewProps) {
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    async function loadPreview() {
+      try {
+        const decrypted = await decryptData(document.encrypted, document.content);
+        const blob = new Blob([decrypted], { type: document.contentType });
+        const url = URL.createObjectURL(blob);
+        setPreviewContent(url);
+        return () => {
+          if (url) URL.revokeObjectURL(url);
+        };
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to load preview",
+          variant: "destructive"
+        });
+      }
+    }
+    loadPreview();
+  }, [document, toast]);
+
+  if (!previewContent) {
+    return (
+      <div className="w-full h-96 flex items-center justify-center">
+        <span className="loading loading-spinner loading-lg"></span>
+      </div>
+    );
+  }
+
+  switch (document.contentType) {
+    case 'application/pdf':
+      return (
+        <div className="w-full h-[600px] overflow-auto">
+          <PDFDocument file={previewContent}>
+            <Page pageNumber={1} width={800} />
+          </PDFDocument>
+        </div>
+      );
+    case 'image/jpeg':
+    case 'image/png':
+    case 'image/gif':
+      return (
+        <div className="w-full flex justify-center">
+          <img src={previewContent} alt={document.title} className="max-h-[600px] object-contain" />
+        </div>
+      );
+    case 'text/plain':
+    case 'text/markdown':
+      return (
+        <div className="w-full h-[600px] overflow-auto p-4 bg-muted rounded-lg">
+          <iframe src={previewContent} className="w-full h-full border-0" title={document.title} />
+        </div>
+      );
+    default:
+      return (
+        <div className="w-full h-96 flex items-center justify-center">
+          <p>Preview not available for this file type</p>
+        </div>
+      );
+  }
 }
 
 export default function DocumentCard({ document, onTagsUpdate }: DocumentCardProps) {
@@ -33,7 +113,7 @@ export default function DocumentCard({ document, onTagsUpdate }: DocumentCardPro
 
       <CardContent>
         <div className="flex flex-wrap gap-2 mb-4">
-          {document.tags.slice(0, 3).map((tag, i) => (
+          {document.tags.slice(0, 3).map((tag: string, i: number) => (
             <Badge key={i} variant="secondary">{tag}</Badge>
           ))}
           {document.tags.length > 3 && (
@@ -49,9 +129,7 @@ export default function DocumentCard({ document, onTagsUpdate }: DocumentCardPro
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl">
-              <div className="aspect-[16/9] bg-muted rounded-lg flex items-center justify-center">
-                Preview content for {document.title}
-              </div>
+              <DocumentPreview document={document} />
             </DialogContent>
           </Dialog>
           

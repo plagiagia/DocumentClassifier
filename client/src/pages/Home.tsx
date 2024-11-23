@@ -25,16 +25,47 @@ export default function Home() {
     }
   });
 
-  const filteredDocs = documents?.filter(doc => 
+  const filteredDocs = documents?.map(doc => ({
+    ...doc,
+    tags: (doc.tags as string[]) || []
+  })).filter(doc => 
     doc.title.toLowerCase().includes(search.toLowerCase())
   );
 
   const onUpload = async (values: { title: string, file: File | null }) => {
     if (!values.file) return;
-    
+
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'text/plain',
+      'text/markdown'
+    ];
+
+    if (!allowedTypes.includes(values.file.type)) {
+      toast({
+        title: "Error",
+        description: "File type not supported",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (values.file.size > 10 * 1024 * 1024) { // 10MB limit
+      toast({
+        title: "Error",
+        description: "File size exceeds 10MB limit",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const formData = new FormData();
     formData.append("title", values.title);
     formData.append("file", values.file);
+    formData.append("contentType", values.file.type);
 
     try {
       const response = await fetch("/api/documents", {

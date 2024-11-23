@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface DocumentGridProps {
-  documents: Document[];
+  documents: (Document & { tags: string[] })[];
   isLoading: boolean;
 }
 

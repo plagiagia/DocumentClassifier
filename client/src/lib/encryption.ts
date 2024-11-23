@@ -37,7 +37,7 @@ export async function decryptData(encryptedData: string, key: string): Promise<A
   const decrypted = await window.crypto.subtle.decrypt(
     algorithm,
     cryptoKey,
-    new Uint8Array([...data, ...tag])
+    new Uint8Array(Array.from(data).concat(Array.from(tag)))
   );
 
   return decrypted;
