@@ -1,10 +1,17 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
+import session from "express-session";
 import { db } from "../db";
 import { documents, users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import multer from "multer";
 import { z } from "zod";
+
+declare module 'express-session' {
+  interface SessionData {
+    userId?: number;
+  }
+}
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -17,6 +24,17 @@ function encryptData(data: Buffer, key: string): string {
 }
 
 export function registerRoutes(app: Express) {
+  // Configure session middleware
+  app.use(session({
+    secret: crypto.randomBytes(32).toString('hex'),
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+  }));
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     const { username, password } = req.body;
