@@ -16,7 +16,7 @@ export const documents = pgTable("documents", {
   content: text("content").notNull(),
   encrypted: text("encrypted").notNull(),
   contentType: text("content_type").notNull(),
-  tags: jsonb("tags").default([]).notNull(),
+  tags: jsonb("tags").$type<string[]>().default([]).notNull(),
   significance: integer("significance").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull()
