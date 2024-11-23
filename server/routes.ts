@@ -5,7 +5,13 @@ import { documents, users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import multer from "multer";
+import bcrypt from "bcrypt";
 import { z } from "zod";
+
+const authSchema = z.object({
+  username: z.string().min(3).max(50),
+  password: z.string().min(6).max(100)
+});
 
 declare module 'express-session' {
   interface SessionData {
@@ -37,32 +43,51 @@ export function registerRoutes(app: Express) {
   }));
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
-    const { username, password } = req.body;
     try {
-      const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+      const result = authSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid input", details: result.error.issues });
+      }
+      
+      const { username, password } = result.data;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
       const user = await db.insert(users).values({
         username,
         password: hashedPassword
       }).returning();
+      
       req.session.userId = user[0].id;
       res.json({ success: true });
-    } catch (error) {
-      res.status(400).json({ error: "Username already exists" });
+    } catch (error: any) {
+      if (error.code === '23505') { // Unique violation
+        res.status(400).json({ error: "Username already exists" });
+      } else {
+        res.status(500).json({ error: "Server error" });
+      }
     }
   });
 
   app.post("/api/auth/login", async (req, res) => {
-    const { username, password } = req.body;
-    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
-    const user = await db.query.users.findFirst({
-      where: eq(users.username, username)
-    });
-    
-    if (user && user.password === hashedPassword) {
+    try {
+      const result = authSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid input", details: result.error.issues });
+      }
+
+      const { username, password } = result.data;
+      const user = await db.query.users.findFirst({
+        where: eq(users.username, username)
+      });
+      
+      if (!user || !(await bcrypt.compare(password, user.password))) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
       req.session.userId = user.id;
       res.json({ success: true });
-    } else {
-      res.status(401).json({ error: "Invalid credentials" });
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
     }
   });
 
